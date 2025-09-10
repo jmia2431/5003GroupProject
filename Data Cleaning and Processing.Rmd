@@ -4,9 +4,202 @@ author: "mia"
 date: "2025-09-10"
 output: html_document
 ---
-
+```{r setup, echo=FALSE, warning=FALSE}
+library(dplyr)
+library(stringr)
+library(lubridate)
+library(gt)
+library(rlang)
+library(ggplot2)
+library(scales)
+library(forcats)
+library(factoextra)
+orig_data = read.csv("listings.csv")
+```
 # Clean and Prepare the Data
 ## Removal of Irrelevant Columns
+exclude url that cannot be used, id and name and description are not considered as factors in this study, variables without description from dataset is also removed. duplicated information(property_type&room_type) kept one. empty columns.
+```{r}
+filter_vars <- c("scrape_id","host_name", "host_about", "host_thumbnail_url", "host_picture_url", "id", "listing_url", "name", "description", "picture_url", "host_url", "host_neighbourhood", "availability_eoy", "number_of_reviews_ly", "estimated_occupancy_l365d", "estimated_revenue_l365d", "source", "host_response_time", "host_response_rate", "host_is_superhost", "host_verifications", "host_has_profile_pic", "host_identity_verified","neighbourhood", "amenities","calendar_updated", "calendar_last_scraped","review_scores_rating", "review_scores_accuracy","review_scores_cleanliness", "review_scores_checkin","review_scores_communication", "review_scores_location","review_scores_value","property_type", "calendar_updated", "minimum_minimum_nights", "maximum_minimum_nights", "minimum_maximum_nights", "maximum_maximum_nights", "minimum_nights_avg_ntm", "maximum_nights_avg_ntm","neighbourhood_group_cleansed", "host_listings_count", "calculated_host_listings_count_entire_homes", "calculated_host_listings_count_private_rooms", "calculated_host_listings_count_shared_rooms", "last_review")
+
+
+cleaned_data <- orig_data %>%
+  #remove unused column
+  select(-any_of(filter_vars)) %>%
+  #feature engineering
+  mutate(
+    bathrooms = coalesce(
+      bathrooms,
+      case_when(
+        str_detect(bathrooms_text, regex("half", ignore_case = TRUE)) ~ 0.5,
+        TRUE ~ as.numeric(str_extract(bathrooms_text, "\\d+(?:\\.\\d+)?")))),
+    host_since = ymd(host_since),
+    first_review = ymd(first_review),
+    last_scraped = ymd(last_scraped),
+    host_tenure = as.numeric(last_scraped - host_since, units = "days"),
+    listing_age = as.numeric(last_scraped - first_review, units = "days")) %>%
+  # remove invalid data
+  filter(str_detect(host_location, "Australia"),
+         license != "",
+         price != "",
+         has_availability != "",
+         minimum_nights <= 365) %>%
+  # drop usefulness columns
+  select(-c("bathrooms_text", "host_location","host_since", "first_review", "last_scraped","license","has_availability"))
+```
+after remove all the empty in has_availability there's no f value, therefore remove the variable.
+
+```{r}
+dim(cleaned_data)
+
+description_table_clean <- tibble(Variable = names(cleaned_data)) %>%
+  mutate(Type = sapply(cleaned_data, class),
+         Unique_Values = sapply(cleaned_data, function(x) n_distinct(x, na.rm = TRUE))) %>%
+  select(Variable, Type, Unique_Values)
+
+description_table_clean
+```
+```{r}
+cleaned_data <- cleaned_data %>%
+  mutate(
+    neighborhood_overview = ifelse(!is.na(neighborhood_overview) & neighborhood_overview != "", 1, 0),
+    host_acceptance_rate = as.numeric(str_remove(host_acceptance_rate, "%")),
+    price = as.numeric(str_remove(price, "[$]")),
+    instant_bookable = as.integer(instant_bookable == "t")) %>%
+  filter(across(
+    .cols = where(is.numeric) & !any_of(c("longitude", "latitude")),
+    .fns  = ~ is.na(.x) | .x >= 0),
+    price > 0,
+    host_tenure >= listing_age)
+
+description_table_clean <- tibble(Variable = names(cleaned_data)) %>%
+  mutate(Type = sapply(cleaned_data, class),
+         Unique_Values = sapply(cleaned_data, function(x) n_distinct(x, na.rm = TRUE))) %>%
+  select(Variable, Type, Unique_Values) %>%
+  distinct()
+
+description_table_clean
+```
+
+```{r}
+dims <- cleaned_data %>%
+  distinct() %>%
+  dim()
+
+n_numeric <- sum(sapply(cleaned_data, is.numeric))
+
+n_categorical <- sum(sapply(cleaned_data, function(x) is.character(x) | is.factor(x)))
+
+summary_table <- tibble(
+  Dimension = c("Rows", "Columns", "Numeric Variables", "Categorical Variables"),
+  Count     = c(dims, n_numeric, n_categorical)
+)
+
+summary_table %>%
+  gt() %>%
+  tab_header(title = "Dimensions of Unique Tibble") %>%
+  tab_caption(md("Dimensions of Unique Data Table"))
+```
+
+```{r}
+plot_categorical_distribution <- function(data) {
+  categorical_vars <- data %>%
+    select(where(is.factor) | where(is.character))
+  figure_counter <- 1
+  for (var in names(categorical_vars)) {
+    non_na_data <- data %>%
+      filter(!is.na(.data[[var]]))
+    if (nrow(non_na_data) == 0) next
+    
+    figure_title <- paste("Proportion of Categories in ", var, sep = "")
+    
+    p <- ggplot(non_na_data, aes(x = .data[[var]])) +       
+      geom_bar(aes(y = (..count..) / sum(..count..), fill = .data[[var]]), color = "black") +       
+      labs(title = figure_title, x = "Category", y = "Proportion") +       
+      theme_minimal() +       
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    print(p)
+    figure_counter <- figure_counter + 1
+    }
+  }
+```
+
+```{r, fig.width= 15}
+plot_categorical_distribution(cleaned_data)
+```
+
+```{r}
+neigh_coords <- cleaned_data %>%
+  filter(!is.na(longitude), !is.na(latitude), !is.na(neighbourhood_cleansed)) %>%
+  group_by(neighbourhood_cleansed) %>%
+  summarise(
+    avg_lon = mean(longitude, na.rm = TRUE),
+    avg_lat = mean(latitude, na.rm = TRUE),
+    .groups = "drop")
+
+set.seed(5003)
+km <- kmeans(scale(neigh_coords[, c("avg_lon", "avg_lat")]), centers = 3, nstart = 25)
+neigh_coords$cluster <- factor(km$cluster)
+
+coords <- neigh_coords[, c("avg_lon", "avg_lat")]
+
+# Elbow method
+fviz_nbclust(scale(coords), kmeans, method = "wss") + 
+  labs(title = "Elbow Method for Optimal k")
+
+# Silhouette method
+fviz_nbclust(scale(coords), kmeans, method = "silhouette") + 
+  labs(title = "Silhouette Method for Optimal k")
+
+ggplot(neigh_coords, aes(x = avg_lon, y = avg_lat, color = cluster)) +
+  geom_point() +
+  labs(title = "Geographical Distribution of Clusters") +
+  theme_minimal()
+```
+
+```{r}
+cleaned_data <- cleaned_data %>%
+  mutate(
+    room_type = case_when(
+      room_type == "Entire home/apt" ~ "Entire home/apt",
+      room_type %in% c("Hotel room", "Private room", "Shared room") ~ "Non-entire place",TRUE ~ room_type)) %>%
+  left_join(neigh_coords %>% select(neighbourhood_cleansed, cluster), 
+            by = "neighbourhood_cleansed") %>%
+  select(-c("neighbourhood_cleansed","latitude", "longitude"))
+```
+
+```{r}
+cleaned_data <- cleaned_data %>%
+  mutate(
+    commercial_score =
+      (availability_365 >= 300) +
+      (minimum_nights <= 10) +
+      (host_total_listings_count >= 5) +
+      (instant_bookable == "t") +
+      (room_type == "Entire home/apt"),
+    rental_type = ifelse(commercial_score >= 3, "commercial", "occasional"))
+```
+
+```{r, fig.width= 15}
+plot_categorical_distribution(cleaned_data)
+```
+```{r}
+cleaned_data <- cleaned_data %>%
+  mutate(
+    # host_acceptance_rate
+    host_acceptance_rate_missing = ifelse(is.na(host_acceptance_rate), 1, 0),
+    host_acceptance_rate = ifelse(is.na(host_acceptance_rate), -1, host_acceptance_rate),
+    
+    # beds/bedrooms/bathrooms
+    beds_missing = ifelse(is.na(beds), 1, 0),
+    bedrooms_missing = ifelse(is.na(bedrooms), 1, 0),
+    bathrooms_missing = ifelse(is.na(bathrooms), 1, 0)
+  )
+
+
+gg_miss_var(cleaned_data%>%select(-c("beds","bedrooms","bathrooms")))
+```
+
 
 ## Formatting and Type Conversion
 - Ensure column names are consistent
