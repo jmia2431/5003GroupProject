@@ -2,17 +2,64 @@
 title: "Data Cleaning"
 author: "mia"
 date: "2025-09-10"
-output: html_document
+output: 
+  html_document:
+  toc: true
+  df_print: default
 ---
 
 ```{r library setup, include=FALSE}
-library(readr)
+library(dplyr)
+library(knitr)
+library(purrr)
+library(naniar)
 ```
 
 ```{r data import}
-orig_data = read_csv("listings.csv")
+orig_data = read.csv("listings.csv")
+dictionary = read.csv("Inside Airbnb Data Dictionary - listings.csv detail v4.3.csv")
 ```
 # Describe the Data
 ## Data Description
-sample size, variable description(in table), missing values
+```{r data description}
+orig_dim = dim(orig_data)
+
+dictionary_clean <- dictionary %>%
+  select(Variable = 1, Description = 4)
+
+description_table <- tibble(Variable = names(orig_data)) %>%
+  mutate(Type = ifelse(sapply(orig_data, is.numeric), "Numeric", "Categorical"),
+         Unique_Values = sapply(orig_data, function(x) n_distinct(x, na.rm = TRUE))) %>%
+  left_join(dictionary_clean, by = "Variable") %>%
+  select(Variable, Description, Type, Unique_Values)
+
+n_numeric = sum(description_table$Type == "Numeric")
+n_categorical = sum(description_table$Type == "Categorical")
+
+categorical_range <- description_table %>%
+  filter(Type == "Categorical") %>%
+  summarise(`# Categorical Variables` = n(),
+            `Min Categories` = min(Unique_Values, na.rm = TRUE),
+            `Max Categories` = max(Unique_Values, na.rm = TRUE))
+
+categorical_range
+```
+The raw dataset contains `r orig_dim[1]` attributes and `r orig_dim[2]` instances.  
+Among these variables, `r n_numeric` are numeric and `r n_categorical` are categorical (see [Appendix 1]).  
+
+Within the categorical variables, the number of distinct categories ranges from `r categorical_range[1]` to `r categorical_range[2]`, across `r categorical_range[3]` variables (see [Table 1]).  
+
+Overall, the dataset has a missingness of `r round(mean(is.na(orig_data)) * 100, 2)`% across all cells (see [Appendix 2]).
+
+
 ## Independent and Dependent Variables
+
+# Appendix
+Variable Description
+```{r, echo=FALSE}
+description_table
+```
+Missing Value
+```{r figure x, fig.height= 12}
+gg_miss_var(orig_data)
+```
