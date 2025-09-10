@@ -1,0 +1,13 @@
+---
+title: "Report"
+author: "mia"
+date: "2025-09-10"
+output: html_document
+---
+# Define the Problem
+What is the research question your group wants to investigate?
+Describe how this is a classification problem
+Why does it matter, and how does it connect to Sydney/Australia (applicable if you solve a local problem)?
+
+The research question for this project is:  
+What kinds of Airbnb lisiting are more likely to be available year-round versus those that are occasional or long-term rentals
