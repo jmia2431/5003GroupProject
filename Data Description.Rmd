@@ -1,0 +1,19 @@
+---
+title: "Data Cleaning"
+author: "mia"
+date: "2025-09-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(readr)
+```
+
+```{r}
+orig_data = read_csv("listings.csv")
+```
+
+# Describe the Data
+## Data Description
+sample size, variable description(in table), missing values
+## Independent and Dependent Variables
