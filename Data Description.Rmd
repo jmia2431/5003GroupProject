@@ -53,6 +53,9 @@ Overall, the dataset has a missingness of `r round(mean(is.na(orig_data)) * 100,
 
 
 ## Independent and Dependent Variables
+Dependent variable: binary categorical variable indicating rental type. this variable contain two outcome which is commerica where there's always available, entire unit, multiple listings by host and  occasional where there's limited availability, host-occupied, fewer listings. Yet this metric it not in the raw data, we will construct it using availability_365, minimum_nights, host_total_listings_count and instant_bookable.
+
+Independent Variables: host_id, host_listings_count, host_total_listings_count, calculated_host_listings_count_, host_is_superhost, host_identity_verified, host_response_time, host_response_rate, host_acceptance_rate, property_type, room_type, accommodates, bathrooms, bedrooms, beds, price, amenities,instant_bookable, availability_30, availability_60, availability_90, availability_365, minimum_nights, maximum_nights and variations, reviews_per_month, neighbourhood_cleansed, latitude, longitude, review_scores_rating, review_scores_cleanliness, review_scores_value
 
 # Appendix
 Variable Description
