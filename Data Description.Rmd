@@ -60,7 +60,7 @@ Independent Variables: host_id, host_listings_count, host_total_listings_count, 
 # Appendix
 Variable Description
 ```{r, echo=FALSE}
-description_table
+kable(description_table)
 ```
 Missing Value
 ```{r figure x, fig.height= 12}

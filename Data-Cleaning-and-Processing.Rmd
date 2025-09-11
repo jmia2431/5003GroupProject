@@ -14,6 +14,7 @@ library(ggplot2)
 library(scales)
 library(forcats)
 library(factoextra)
+library(tibble)
 orig_data = read.csv("listings.csv")
 ```
 # Clean and Prepare the Data
@@ -200,6 +201,58 @@ cleaned_data <- cleaned_data %>%
 gg_miss_var(cleaned_data%>%select(-c("beds","bedrooms","bathrooms")))
 ```
 
+```{r}
+data_dictionary <- tribble(
+  ~variable,                         ~description,                                                                   ~type,                      ~notes,
+  "neighborhood_overview",           "Free-text description of the neighbourhood",                                   "character",               "Kept for reference; not used directly in modeling unless vectorized",
+  "host_id",                         "Unique identifier of the host",                                                "integer / character",     "Identifier; do not use as feature directly",
+  "host_acceptance_rate",            "Percent of booking requests accepted (0–100; -1 if originally missing)",       "numeric (int)",           "Filled -1 for NA; paired with missing flag",
+  "host_total_listings_count",       "Total number of listings managed by the host",                                 "integer",                 ">= 0",
+  "room_type",                       "Room type (Entire home/apt vs Non-entire place)",                              "factor (2 levels)",       "Re-coded to two groups",
+  "accommodates",                    "Maximum number of guests accommodated",                                         "integer",                 ">= 0",
+  "bathrooms",                       "Number of bathrooms",                                                           "numeric",                 "0 valid (shared/none); NA imputed and flagged",
+  "bedrooms",                        "Number of bedrooms",                                                            "integer",                 "0 valid (studio); NA imputed and flagged",
+  "beds",                            "Number of beds",                                                                "integer",                 "0 valid; NA imputed and flagged",
+  "price",                           "Nightly price",                                                                 "numeric",                 "Non-negative; currency in listing locale",
+  "minimum_nights",                  "Minimum nights per stay",                                                       "integer",                 ">= 0; outliers handled",
+  "maximum_nights",                  "Maximum nights per stay",                                                       "integer",                 ">= 0",
+  "availability_30",                 "Available days in next 30 days",                                                "integer",                 "0–30",
+  "availability_60",                 "Available days in next 60 days",                                                "integer",                 "0–60",
+  "availability_90",                 "Available days in next 90 days",                                                "integer",                 "0–90",
+  "availability_365",                "Available days in next 365 days",                                               "integer",                 "0–365",
+  "number_of_reviews",               "Total number of reviews",                                                       "integer",                 ">= 0",
+  "number_of_reviews_ltm",           "Reviews in last 12 months",                                                     "integer",                 ">= 0",
+  "number_of_reviews_l30d",          "Reviews in last 30 days",                                                       "integer",                 ">= 0",
+  "instant_bookable",                "Instant booking enabled (1=yes, 0=no)",                                         "binary (0/1)",            "Converted from 't'/'f'",
+  "calculated_host_listings_count",  "Derived host listing count by platform",                                        "integer",                 "Platform-derived; cross-check with host_total_listings_count",
+  "reviews_per_month",               "Average reviews per month",                                                     "numeric",                 ">= 0; may be NA for new listings",
+  "host_tenure",                     "Host account age",                                                              "integer",                 "Unit per your calc (days/months); should be ≥ listing_age",
+  "listing_age",                     "Listing age since creation",                                                    "integer",                 "Unit per your calc (days/months)",
+  "cluster",                         "Neighbourhood cluster label",                                                   "integer (categorical)",   "From clustering of neighbourhood coordinates",
+  "commercial_score",                "Composite score indicating commercial tendency",                                "integer (0–5)",           "Sum of boolean conditions (e.g., availability, min nights, multi-listings, entire home, instant book)",
+  "rental_type",                     "Dependent variable: 1=Commercial, 0=Occasional",                                "binary (0/1)",            "Constructed from multiple proxies incl. commercial_score",
+  "host_acceptance_rate_missing",    "Was host_acceptance_rate originally missing? 1=yes, 0=no",                      "binary (0/1)",            "Missingness indicator",
+  "beds_missing",                    "Was beds originally missing? 1=yes, 0=no",                                      "binary (0/1)",            "Missingness indicator",
+  "bedrooms_missing",                "Was bedrooms originally missing? 1=yes, 0=no",                                  "binary (0/1)",            "Missingness indicator",
+  "bathrooms_missing",               "Was bathrooms originally missing? 1=yes, 0=no",                                 "binary (0/1)",            "Missingness indicator"
+)
+auto_dict <- tibble(
+  variable  = names(cleaned_data),
+  r_class   = map_chr(cleaned_data, ~ paste(class(.x), collapse = "/")),
+  n_missing = map_int(cleaned_data, ~ sum(is.na(.x))),)
+
+final_dict <- auto_dict %>%
+  left_join(data_dictionary, by = "variable") %>%
+  relocate(variable, description, type, r_class, n_missing, notes)
+```
+
+```{r}
+write.csv(final_dict, "cleaned_data_dictionary.csv", row.names = FALSE)
+```
+
+```{r}
+write.csv(cleaned_data, "cleaned_data.csv", row.names = FALSE)
+```
 
 ## Formatting and Type Conversion
 - Ensure column names are consistent

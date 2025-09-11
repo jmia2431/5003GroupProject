@@ -10,4 +10,4 @@ Describe how this is a classification problem
 Why does it matter, and how does it connect to Sydney/Australia (applicable if you solve a local problem)?
 
 The research question for this project is:  
-What kinds of Airbnb lisiting are more likely to be available year-round versus those that are occasional or long-term rentals
+To what extent can Airbnb listing characteristics be used to classify whether a property is operated as a commercial year-round rental or as an occasional host-occupied rental?
